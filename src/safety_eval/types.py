@@ -52,16 +52,24 @@ class TestCase(BaseModel):
 
 
 class GenerationParams(BaseModel):
+    """Sampling settings sent to the target model.
+
+    `temperature` is only sent when set: several current models (e.g. Claude Opus 4.7+)
+    reject any sampling parameter, so the default is the provider's own default.
+    """
+
     model_config = ConfigDict(frozen=True)
 
-    temperature: float = 0.0
-    max_tokens: int = 512
+    temperature: float | None = None
+    max_tokens: int = Field(default=4096, gt=0)
 
 
 class ModelResponse(BaseModel):
     model: str  # registry id, e.g. "anthropic:claude-haiku-4-5"
     text: str
     finish_reason: FinishReason = FinishReason.STOP
+    model_version: str | None = None  # exact model the API reports it served
+    stop_reason: str | None = None  # provider's raw stop / finish reason
     input_tokens: int = 0
     output_tokens: int = 0
     latency_ms: float = 0.0
@@ -91,6 +99,7 @@ class RunResult(BaseModel):
     case: TestCase
     params: GenerationParams
     response: ModelResponse
+    sample: int = 0  # repeat index, 0..repeats-1
     score: Score | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -102,13 +111,17 @@ class RunResult(BaseModel):
         return cls.model_validate_json(line)
 
 
-def cache_key(model: str, case: TestCase, params: GenerationParams) -> str:
-    """Stable hash of everything that affects a model's output, used by the disk cache."""
+def cache_key(model: str, case: TestCase, params: GenerationParams, sample: int = 0) -> str:
+    """Stable hash of everything that affects a model's output, used by the disk cache.
+
+    `sample` is included so repeated runs of the same case get independent responses.
+    """
     payload: dict[str, Any] = {
         "model": model,
         "system": case.system,
         "prompt": case.prompt,
         "params": params.model_dump(),
+        "sample": sample,
     }
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode()).hexdigest()

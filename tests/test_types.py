@@ -37,6 +37,7 @@ def test_cache_key_is_stable_and_param_sensitive() -> None:
     assert cache_key("m", CASE, p) == cache_key("m", CASE, GenerationParams())
     assert cache_key("m", CASE, p) != cache_key("m", CASE, GenerationParams(temperature=1.0))
     assert cache_key("m", CASE, p) != cache_key("other", CASE, p)
+    assert cache_key("m", CASE, p, sample=0) != cache_key("m", CASE, p, sample=1)
 
 
 def test_score_passed() -> None:

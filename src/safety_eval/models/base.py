@@ -8,7 +8,7 @@ from safety_eval.types import GenerationParams, ModelResponse
 
 
 class AdapterError(Exception):
-    """Base class for normalized provider errors."""
+    """Base class for normalized provider errors. Not retried; recorded as an error response."""
 
 
 class RateLimitError(AdapterError):
@@ -16,7 +16,11 @@ class RateLimitError(AdapterError):
 
 
 class TransientError(AdapterError):
-    """Timeout or 5xx; safe to retry."""
+    """Timeout, connection failure or 5xx; safe to retry."""
+
+
+class FatalAdapterError(AdapterError):
+    """Bad credentials or unknown model: every request would fail, so the run stops."""
 
 
 class ModelAdapter(ABC):
@@ -40,3 +44,6 @@ class ModelAdapter(ABC):
         Raise RateLimitError / TransientError for retryable failures. Content-filter
         blocks are not errors: return a ModelResponse with finish_reason=CONTENT_FILTER.
         """
+
+    async def aclose(self) -> None:  # noqa: B027 - optional hook, no-op by default
+        """Release network resources. Called once when a run finishes."""

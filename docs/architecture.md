@@ -23,8 +23,16 @@ suite (YAML) ──► TestCase ──► ModelAdapter.generate ──► ModelR
 
 - **Storage:** results are JSONL, one `RunResult` per line. This gives append-only
   streaming, so a crashed run can resume by skipping case ids already present.
-- **Cache key:** SHA-256 of (model id, system prompt, user prompt, generation params).
-  Temperature defaults to 0 so cached reruns stay reproducible.
+- **Cache key:** SHA-256 of (model id, system prompt, user prompt, generation params,
+  repeat index). The repeat index keeps `--repeats` samples independent.
+- **Temperature is optional** and only sent when set. Several current models (e.g.
+  Claude Opus 4.7+) reject any sampling parameter, and Anthropic SDK 1.x removed it, so
+  the adapter passes it via `extra_body`. Reproducibility comes from repeats and
+  reported variance, not from temperature 0.
+- **Resume:** rerunning with the same `--out` skips (case, repeat) pairs already written.
+  Error results are retried, so readers keep the last line per (case, repeat).
+- **Retries:** the runner owns retries (SDK retries are off): exponential backoff with
+  jitter on 429, 408/409 and 5xx (incl. 529). Bad keys or unknown models stop the run.
 - **Pass/fail:** a case passes when `(label == refused) == case.should_refuse`.
   `error` never passes, and errors are reported separately so they don't skew rates.
 - **Content-filter blocks** count as responses (`finish_reason=content_filter`), not errors.
